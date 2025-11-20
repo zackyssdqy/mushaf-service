@@ -8,11 +8,12 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-app.get("/", (req, res) => res.send("Backend Mushaf Krapyak ready!"));
+// Default route
+app.get("/", (req, res) => {
+  res.send("Backend Mushaf Krapyak ready!");
+});
 
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
-
+// Routes
 import artikelRoutes from "./routes/artikel.routes.js";
 app.use("/artikel", artikelRoutes);
 
@@ -30,3 +31,4 @@ app.use("/kategori", kategoriRoutes);
 
 
 
+export default app;
