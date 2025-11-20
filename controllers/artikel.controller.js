@@ -11,6 +11,7 @@ export const getAllArtikel = async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 };
+//cek branch
 
 // GET artikel by ID
 export const getArtikelById = async (req, res) => {
