@@ -1,5 +1,7 @@
 import pool from "../config/db.js";
 import slugify from "slugify";
+import fs from "fs";
+import path from "path";
 
 // GET all artikel
 export const getAllArtikel = async (req, res) => {

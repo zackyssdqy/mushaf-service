@@ -28,5 +28,8 @@ app.use("/spek", spekRoutes);
 import kategoriRoutes from "./routes/kategori.routes.js";
 app.use("/kategori", kategoriRoutes);
 
+import pemesananRoutes from "./routes/pemesanan.routes.js";
+app.use("/pemesanan", pemesananRoutes);
+
 
 

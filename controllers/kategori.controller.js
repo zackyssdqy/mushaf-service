@@ -24,20 +24,27 @@ export const getKategoriById = async (req, res) => {
   }
 };
 
-// CREATE kategori
+import { v4 as uuidv4 } from "uuid";
+
 export const createKategori = async (req, res) => {
-  const { kategori_id, nama_kategori } = req.body;
+  const { nama_kategori } = req.body;
+
   try {
+    const kategori_id = uuidv4(); // generate ID otomatis
+
     const result = await pool.query(
       "INSERT INTO kategori_artikel (kategori_id, nama_kategori) VALUES ($1,$2) RETURNING *",
       [kategori_id, nama_kategori]
     );
+
     res.status(201).json(result.rows[0]);
+
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Server error" });
   }
 };
+
 
 // UPDATE kategori
 export const updateKategori = async (req, res) => {

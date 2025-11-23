@@ -1,4 +1,5 @@
 import pool from "../config/db.js";
+import { v4 as uuidv4 } from "uuid";
 
 // GET all penulis
 export const getAllPenulis = async (req, res) => {
@@ -27,17 +28,22 @@ export const getPenulisById = async (req, res) => {
 // CREATE penulis
 export const createPenulis = async (req, res) => {
   const { nama } = req.body;
+
   try {
+    const penulis_id = uuidv4();
+
     const result = await pool.query(
-      `INSERT INTO penulis (nama) VALUES ($1) RETURNING *`,
-      [nama]
+      `INSERT INTO penulis (penulis_id, nama) VALUES ($1, $2) RETURNING *`,
+      [penulis_id, nama]
     );
+
     res.status(201).json(result.rows[0]);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Server error" });
   }
 };
+
 
 // UPDATE penulis
 export const updatePenulis = async (req, res) => {
