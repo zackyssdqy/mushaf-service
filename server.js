@@ -1,6 +1,7 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
+import path from "path";
 
 dotenv.config();
 const app = express();
@@ -30,6 +31,8 @@ app.use("/kategori", kategoriRoutes);
 
 import pemesananRoutes from "./routes/pemesanan.routes.js";
 app.use("/pemesanan", pemesananRoutes);
+
+app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
 
 
 
