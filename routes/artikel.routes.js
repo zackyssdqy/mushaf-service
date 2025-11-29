@@ -1,5 +1,7 @@
 import express from "express";
 import upload from "../middleware/upload.js";
+import { verifyAdmin } from "../middleware/auth.js";
+
 import {
   getAllArtikel,
   getArtikelById,
@@ -12,8 +14,11 @@ const router = express.Router();
 
 router.get("/", getAllArtikel);
 router.get("/:id", getArtikelById);
-router.post("/", upload.single("featured_image"), createArtikel);
-router.put("/:id", upload.single("featured_image"), updateArtikel);
-router.delete("/:id", deleteArtikel);
+
+router.post("/", verifyAdmin, upload.single("featured_image"), createArtikel);
+router.put("/:id", verifyAdmin, upload.single("featured_image"), updateArtikel);
+router.delete("/:id", verifyAdmin, deleteArtikel);
+
+
 
 export default router;

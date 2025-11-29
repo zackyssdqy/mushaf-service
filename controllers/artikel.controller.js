@@ -1,26 +1,78 @@
 import pool from "../config/db.js";
 import slugify from "slugify";
-import fs from "fs";
-import path from "path";
+import { v2 as cloudinary } from "cloudinary";
+import cache from "../utils/cache.js";
 
-// GET all artikel
+// GET all artikel (CACHE dengan preload TTL 7 menit)
 export const getAllArtikel = async (req, res) => {
   try {
-    const result = await pool.query("SELECT * FROM artikel ORDER BY createddate DESC");
+    console.log("Cache keys before get:", cache.keys());
+
+    const cacheKey = "all_artikel";
+    const cached = cache.get(cacheKey);
+
+    if (cached) {
+      console.log("Cache hit for all_artikel"); // << log saat ambil dari cache
+      return res.json(cached);
+    }
+
+    console.log("Cache miss for all_artikel, querying database..."); // << log saat query DB
+    const result = await pool.query(`
+      SELECT 
+        a.*,
+        p.nama AS penulis_nama,
+        k.nama_kategori AS kategori_nama
+      FROM artikel a
+      LEFT JOIN penulis p ON a.penulis_id = p.penulis_id
+      LEFT JOIN kategori_artikel k ON a.kategori_id = k.kategori_id
+      ORDER BY a.createddate DESC
+    `);
+
+    // Simpan ke cache TTL 7 menit
+    cache.set(cacheKey, result.rows, 60 * 7);
+
+    console.log("Cache keys after set:", cache.keys()); // << log setelah set cache
     res.json(result.rows);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Server error" });
   }
 };
-//cek branch
 
-// GET artikel by ID
+// GET artikel by ID (CACHE per ID)
 export const getArtikelById = async (req, res) => {
   const { id } = req.params;
+
   try {
-    const result = await pool.query("SELECT * FROM artikel WHERE artikel_id=$1", [id]);
-    if (result.rows.length === 0) return res.status(404).json({ error: "Artikel not found" });
+    const key = `artikel_${id}`;
+    const cached = cache.get(key);
+
+    if (cached) {
+      console.log(`Cache hit for ${key}`); // << log saat ambil dari cache
+      return res.json(cached);
+    }
+
+    console.log(`Cache miss for ${key}, querying database...`); // << log saat query DB
+    const result = await pool.query(
+      `
+      SELECT 
+        a.*,
+        p.nama AS penulis_nama,
+        k.nama_kategori AS kategori_nama
+      FROM artikel a
+      LEFT JOIN penulis p ON a.penulis_id = p.penulis_id
+      LEFT JOIN kategori_artikel k ON a.kategori_id = k.kategori_id
+      WHERE a.artikel_id = $1
+      `,
+      [id]
+    );
+
+    if (!result.rows.length)
+      return res.status(404).json({ error: "Artikel not found" });
+
+    // Simpan ke cache TTL 7 menit
+    cache.set(key, result.rows[0], 60 * 7);
+
     res.json(result.rows[0]);
   } catch (err) {
     console.error(err);
@@ -30,15 +82,35 @@ export const getArtikelById = async (req, res) => {
 
 // CREATE artikel
 export const createArtikel = async (req, res) => {
-  const { judul, excerpt, content, kategori_id, penulis_id, tanggal, isfeatured } = req.body;
-  const featured_image = req.file ? req.file.filename : null;
+  const {
+    judul,
+    excerpt,
+    content,
+    kategori_id,
+    penulis_id,
+    tanggal,
+    isfeatured,
+  } = req.body;
+  const artikelTanggal = tanggal || new Date().toISOString().slice(0, 10); // 'YYYY-MM-DD'
+
+  const featured_image = req.file ? req.file.path : null; // Cloudinary URL
   const slug = slugify(judul, { lower: true, strict: true });
 
   try {
     const result = await pool.query(
       `INSERT INTO artikel (judul, excerpt, content, kategori_id, penulis_id, tanggal, isfeatured, featured_image, slug)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
-      [judul, excerpt, content, kategori_id, penulis_id, tanggal, isfeatured || false, featured_image, slug]
+      [
+        judul,
+        excerpt,
+        content,
+        kategori_id,
+        penulis_id,
+        artikelTanggal,
+        isfeatured || false,
+        featured_image,
+        slug,
+      ]
     );
     res.status(201).json(result.rows[0]);
   } catch (err) {
@@ -50,9 +122,21 @@ export const createArtikel = async (req, res) => {
 // UPDATE artikel
 export const updateArtikel = async (req, res) => {
   const { id } = req.params;
-  const { judul, excerpt, content, kategori_id, penulis_id, tanggal, isfeatured } = req.body;
-  const featured_image = req.file ? req.file.filename : null;
-  const slug = judul ? slugify(judul, { lower: true, strict: true }) : undefined;
+  const {
+    judul,
+    excerpt,
+    content,
+    kategori_id,
+    penulis_id,
+    tanggal,
+    isfeatured,
+  } = req.body;
+  const artikelTanggal = tanggal || undefined;
+
+  const featured_image = req.file ? req.file.path : null;
+  const slug = judul
+    ? slugify(judul, { lower: true, strict: true })
+    : undefined;
 
   try {
     const result = await pool.query(
@@ -68,10 +152,21 @@ export const updateArtikel = async (req, res) => {
         slug = COALESCE($9, slug)
        WHERE artikel_id=$10
        RETURNING *`,
-      [judul, excerpt, content, kategori_id, penulis_id, tanggal, isfeatured, featured_image, slug, id]
+      [
+        judul,
+        excerpt,
+        content,
+        kategori_id,
+        penulis_id,
+        artikelTanggal,
+        isfeatured,
+        featured_image,
+        slug,
+        id,
+      ]
     );
-
-    if (result.rows.length === 0) return res.status(404).json({ error: "Artikel not found" });
+    if (!result.rows.length)
+      return res.status(404).json({ error: "Artikel not found" });
     res.json(result.rows[0]);
   } catch (err) {
     console.error(err);
@@ -83,14 +178,19 @@ export const updateArtikel = async (req, res) => {
 export const deleteArtikel = async (req, res) => {
   const { id } = req.params;
   try {
-    const artikel = await pool.query("SELECT * FROM artikel WHERE artikel_id=$1", [id]);
-    if (!artikel.rows.length) return res.status(404).json({ error: "Artikel not found" });
+    const artikel = await pool.query(
+      "SELECT * FROM artikel WHERE artikel_id=$1",
+      [id]
+    );
+    if (!artikel.rows.length)
+      return res.status(404).json({ error: "Artikel not found" });
 
-    const imageFile = artikel.rows[0].featured_image;
-    if (imageFile) {
-      const filePath = path.join("uploads", imageFile);
-      fs.unlink(filePath, (err) => {
-        if (err) console.error("Error deleting image file:", err);
+    // Hapus gambar dari Cloudinary jika ada
+    const imageUrl = artikel.rows[0].featured_image;
+    if (imageUrl) {
+      const publicId = imageUrl.split("/").pop().split(".")[0];
+      cloudinary.uploader.destroy(`articles/${publicId}`, (err, result) => {
+        if (err) console.error(err);
       });
     }
 
@@ -101,4 +201,3 @@ export const deleteArtikel = async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 };
-
