@@ -52,7 +52,8 @@ export const getArtikelById = async (req, res) => {
       [id]
     );
 
-    if (!result.rows.length) return res.status(404).json({ error: "Artikel not found" });
+    if (!result.rows.length)
+      return res.status(404).json({ error: "Artikel not found" });
 
     cache.set(key, result.rows[0], 60 * 7);
     res.json(result.rows[0]);
@@ -62,9 +63,43 @@ export const getArtikelById = async (req, res) => {
   }
 };
 
+export const getArtikelBySlug = async (req, res) => {
+  const { slug } = req.params;
+
+  try {
+    const result = await pool.query(
+      `SELECT 
+        a.*,
+        p.nama AS penulis_nama,
+        k.nama_kategori AS kategori_nama
+      FROM artikel a
+      LEFT JOIN penulis p ON a.penulis_id = p.penulis_id
+      LEFT JOIN kategori_artikel k ON a.kategori_id = k.kategori_id
+      WHERE a.slug = $1`,
+      [slug]
+    );
+
+    if (!result.rows.length)
+      return res.status(404).json({ error: "Artikel not found" });
+
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server error" });
+  }
+};
+
 // CREATE artikel
 export const createArtikel = async (req, res) => {
-  const { judul, excerpt, content, kategori_id, penulis_id, tanggal, isfeatured } = req.body;
+  const {
+    judul,
+    excerpt,
+    content,
+    kategori_id,
+    penulis_id,
+    tanggal,
+    isfeatured,
+  } = req.body;
   const artikelTanggal = tanggal || new Date().toISOString().slice(0, 10);
   const featured_image = req.file ? req.file.path : null;
   const slug = slugify(judul, { lower: true, strict: true });
@@ -73,7 +108,17 @@ export const createArtikel = async (req, res) => {
     const result = await pool.query(
       `INSERT INTO artikel (judul, excerpt, content, kategori_id, penulis_id, tanggal, isfeatured, featured_image, slug)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
-      [judul, excerpt, content, kategori_id, penulis_id, artikelTanggal, isfeatured || false, featured_image, slug]
+      [
+        judul,
+        excerpt,
+        content,
+        kategori_id,
+        penulis_id,
+        artikelTanggal,
+        isfeatured || false,
+        featured_image,
+        slug,
+      ]
     );
 
     // ⚡ Invalidate cache list
@@ -89,10 +134,20 @@ export const createArtikel = async (req, res) => {
 // UPDATE artikel
 export const updateArtikel = async (req, res) => {
   const { id } = req.params;
-  const { judul, excerpt, content, kategori_id, penulis_id, tanggal, isfeatured } = req.body;
+  const {
+    judul,
+    excerpt,
+    content,
+    kategori_id,
+    penulis_id,
+    tanggal,
+    isfeatured,
+  } = req.body;
   const artikelTanggal = tanggal || undefined;
   const featured_image = req.file ? req.file.path : null;
-  const slug = judul ? slugify(judul, { lower: true, strict: true }) : undefined;
+  const slug = judul
+    ? slugify(judul, { lower: true, strict: true })
+    : undefined;
 
   try {
     const result = await pool.query(
@@ -108,10 +163,22 @@ export const updateArtikel = async (req, res) => {
         slug = COALESCE($9, slug)
        WHERE artikel_id=$10
        RETURNING *`,
-      [judul, excerpt, content, kategori_id, penulis_id, artikelTanggal, isfeatured, featured_image, slug, id]
+      [
+        judul,
+        excerpt,
+        content,
+        kategori_id,
+        penulis_id,
+        artikelTanggal,
+        isfeatured,
+        featured_image,
+        slug,
+        id,
+      ]
     );
 
-    if (!result.rows.length) return res.status(404).json({ error: "Artikel not found" });
+    if (!result.rows.length)
+      return res.status(404).json({ error: "Artikel not found" });
 
     // ⚡ Invalidate cache list & per ID
     cache.del("all_artikel");
@@ -128,8 +195,12 @@ export const updateArtikel = async (req, res) => {
 export const deleteArtikel = async (req, res) => {
   const { id } = req.params;
   try {
-    const artikel = await pool.query("SELECT * FROM artikel WHERE artikel_id=$1", [id]);
-    if (!artikel.rows.length) return res.status(404).json({ error: "Artikel not found" });
+    const artikel = await pool.query(
+      "SELECT * FROM artikel WHERE artikel_id=$1",
+      [id]
+    );
+    if (!artikel.rows.length)
+      return res.status(404).json({ error: "Artikel not found" });
 
     const imageUrl = artikel.rows[0].featured_image;
     if (imageUrl) {
