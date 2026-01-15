@@ -35,6 +35,13 @@ app.use("/auth", authRoutes);
 // Static folder
 app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
 
+app.use((err, req, res, next) => {
+  console.error(err);
+  res
+    .status(500)
+    .json({ message: "Internal Server Error", error: err.message });
+});
+
 // -----------------------
 // Preload cache function
 // -----------------------
